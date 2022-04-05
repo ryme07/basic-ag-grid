@@ -1,5 +1,193 @@
 <template>
-  <div class="about">
-    <h1>This is an about page</h1>
+  <div>
+    baaaaaaaaaaaa
+    <div style="height: 100%">
+      <ag-grid-vue
+        style="width: 100%; height: 600px"
+        class="ag-theme-alpine"
+        id="myGrid"
+        @grid-ready="onGridReady"
+        @cell-clicked="onCellClicked"
+        @row-editing-started="onRowEditingStarted"
+        @row-editing-stopped="onRowEditingStopped"
+        :gridOptions="gridOptions"
+        :columnDefs="columnDefs"
+        :defaultColDef="defaultColDef"
+        :enableRangeSelection="true"
+        :modules="modules"
+        :rowData="rowData"
+        :editType="editType"
+        :suppressClickEdit="suppressClickEdit"
+      ></ag-grid-vue>
+    </div>
   </div>
 </template>
+
+<script>
+import { AgGridVue } from "ag-grid-vue";
+import { ClientSideRowModelModule } from "@ag-grid-community/client-side-row-model";
+import { RangeSelectionModule } from "@ag-grid-enterprise/range-selection";
+
+export default {
+  name: "AboutView",
+  components: {
+    AgGridVue,
+  },
+  data() {
+    return {
+      gridOptions: null,
+      gridApi: null,
+      columnApi: null,
+      columnDefs: null,
+      defaultColDef: null,
+      // modules: [ClientSideRowModelModule, RangeSelectionModule],
+      rowData: null,
+    };
+  },
+  beforeMount() {
+    this.gridOptions = {};
+    this.editType = "fullRow";
+    this.suppressClickEdit = true;
+    this.columnDefs = [
+      { field: "athlete", minWidth: 150 },
+      { field: "age", maxWidth: 90 },
+      {
+        headerName: "action",
+        minWidth: 150,
+        cellRenderer: this.actionCellRenderer,
+        editable: false,
+        colId: "action",
+      },
+    ];
+    this.defaultColDef = {
+      editable: true,
+    };
+  },
+  mounted() {
+    this.gridApi = this.gridOptions.api;
+    this.gridColumnApi = this.gridOptions.columnApi;
+  },
+  methods: {
+    actionCellRenderer(params) {
+      let eGui = document.createElement("div");
+
+      let editingCells = params.api.getEditingCells();
+      // checks if the rowIndex matches in at least one of the editing cells
+      let isCurrentRowEditing = editingCells.some((cell) => {
+        return cell.rowIndex === params.node.rowIndex;
+      });
+
+      if (isCurrentRowEditing) {
+        eGui.innerHTML = `
+<button  class="action-button update"  data-action="update"> update  </button>
+<button  class="action-button cancel"  data-action="cancel" > cancel </button>
+`;
+      } else {
+        eGui.innerHTML = `
+<button class="action-button edit"  data-action="edit" > edit  </button>
+<button class="action-button delete" data-action="delete" > delete </button>
+`;
+      }
+
+      return eGui;
+    },
+    onCellClicked(params) {
+      // Handle click event for action cells
+      if (
+        params.column.colId === "action" &&
+        params.event.target.dataset.action
+      ) {
+        let action = params.event.target.dataset.action;
+
+        if (action === "edit") {
+          params.api.startEditingCell({
+            rowIndex: params.node.rowIndex,
+            // gets the first columnKey
+            colKey: params.columnApi.getDisplayedCenterColumns()[0].colId,
+          });
+        }
+
+        if (action === "delete") {
+          params.api.applyTransaction({
+            remove: [params.node.data],
+          });
+        }
+
+        if (action === "update") {
+          params.api.stopEditing(false);
+        }
+
+        if (action === "cancel") {
+          params.api.stopEditing(true);
+        }
+      }
+    },
+
+    onRowEditingStarted: (params) => {
+      params.api.refreshCells({
+        columns: ["action"],
+        rowNodes: [params.node],
+        force: true,
+      });
+    },
+    onRowEditingStopped: (params) => {
+      params.api.refreshCells({
+        columns: ["action"],
+        rowNodes: [params.node],
+        force: true,
+      });
+    },
+
+    onGridReady(params) {
+      const httpRequest = new XMLHttpRequest();
+      const updateData = (data) => {
+        this.rowData = data;
+      };
+
+      httpRequest.open(
+        "GET",
+        "https://www.ag-grid.com/example-assets/olympic-winners.json"
+      );
+      httpRequest.send();
+      httpRequest.onreadystatechange = () => {
+        if (httpRequest.readyState === 4 && httpRequest.status === 200) {
+          updateData(JSON.parse(httpRequest.responseText));
+        }
+      };
+    },
+  },
+};
+</script>
+
+<style lang="scss" scoped>
+.action-button {
+  border: none;
+  color: white;
+  padding: 3px 12px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 16px;
+  opacity: 0.7;
+}
+
+.action-button:hover {
+  opacity: 1;
+}
+
+.action-button.edit {
+  background-color: #008cba; /* Blue */
+}
+.action-button.update {
+  background-color: #4caf50; /* Green */
+}
+
+.action-button.delete {
+  background-color: #f44336; /* Red */
+}
+
+.action-button.cancel {
+  background-color: #e7e7e7; /* Gray */
+  color: black;
+}
+</style>
